@@ -1,0 +1,35 @@
+image: maven:3.9-eclipse-temurin-17
+
+stages:
+  - test
+  - sonar
+
+test_job:
+  stage: test
+  script:
+    - cd recyclai
+    - echo "Executing tests..."
+    - mvn clean verify
+  artifacts:
+    paths:
+      - recyclai/target/site/jacoco/jacoco.xml
+      - recyclai/target/surefire-reports/
+  only:
+    - merge_requests
+    - main
+    - branches
+
+sonar_job:
+  stage: sonar
+  needs: ["test_job"]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - cd recyclai
+    - echo "Executing SonarQube analisis..."
+    - mvn clean verify sonar:sonar -Dsonar.projectKey=pbl52_os-simulation -Dsonar.organization=pbl52 -Dsonar.qualitygate.wait=true -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+  allow_failure: false
+  only:
+    - merge_requests
+    - main
+    - branches

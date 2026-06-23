@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GarbageCollector.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">pbl_recyclai</a> &gt; <a href="index.source.html" class="el_package">edu.mondragon.os.pbl.recyclai</a> &gt; <span class="el_source">GarbageCollector.java</span></div><h1>GarbageCollector.java</h1><pre class="source lang-java linenums">package edu.mondragon.os.pbl.recyclai;
+
+public class GarbageCollector extends Thread {
+    private TrashBinSystem system;
+
+/**
+ * GARBAGE COLLECTOR: CONSUMER THREAD
+ * * This thread represents the service vehicle.
+ * It implements the Consumer role in the Producer-Consumer pattern.
+ * It waits for messages (Bins) from the TrashBinSystem queue and processes them sequentially.
+ */
+<span class="fc" id="L12">    public GarbageCollector(TrashBinSystem system) {</span>
+<span class="fc" id="L13">        this.system = system;</span>
+<span class="fc" id="L14">    }</span>
+
+    @Override
+    public void run() {
+        try {
+            while (true) {
+                // 1. Consume Message (Blocking Call)
+                // This thread sleeps here if the queue is empty.
+<span class="fc" id="L22">                Bin targetBin = system.waitForNextJob();</span>
+                
+<span class="fc bfc" id="L24" title="All 2 branches covered.">                if (targetBin == null) break;</span>
+
+<span class="fc" id="L26">                System.out.printf(&quot;[%s] COLLECTOR: New job assigned! Moving to %s.%n&quot;, </span>
+<span class="fc" id="L27">                system.time(), targetBin.getId());</span>
+
+                
+                // 2. Give priority to the Collector
+<span class="fc" id="L31">                targetBin.setUnderMaintenance(true);</span>
+
+<span class="fc" id="L33">                System.out.printf(&quot;[%s] COLLECTOR: Emptying compartments in %s...%n&quot;, system.time(), targetBin.getId());</span>
+
+                // INTEGRATION: Send Log to Backend (ACTIVITY)
+<span class="fc" id="L36">                BackendService.sendLog(targetBin.getId(), &quot;Garbage Collector started emptying the bin.&quot;);</span>
+
+<span class="fc" id="L38">                Thread.sleep(1000); //work time simulation</span>
+
+<span class="fc" id="L40">                targetBin.emptyAllCompartments();</span>
+<span class="fc" id="L41">                System.out.printf(&quot;[%s] COLLECTOR: Finished %s.%n&quot;, system.time(), targetBin.getId());</span>
+
+                // INTEGRATION: Send Log to Backend (FINISHED)
+<span class="fc" id="L44">                BackendService.sendLog(targetBin.getId(), &quot;Garbage Collector finished. Bin is empty.&quot;);</span>
+
+                // 3. Release Access
+<span class="fc" id="L47">                targetBin.setUnderMaintenance(false);</span>
+                
+<span class="fc" id="L49">            }</span>
+<span class="fc" id="L50">        } catch (InterruptedException e) {</span>
+<span class="fc" id="L51">            Thread.currentThread().interrupt();</span>
+<span class="fc" id="L52">        }</span>
+<span class="fc" id="L53">        System.out.printf(&quot;[%s] COLLECTOR: Shift ended.%n&quot;, system.time());</span>
+<span class="fc" id="L54">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

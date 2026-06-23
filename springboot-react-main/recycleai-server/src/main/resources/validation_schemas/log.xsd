@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+    <xs:element name="Log">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="logId" type="xs:int" minOccurs="0"/>
+                <xs:element name="description" type="xs:string"/>
+                <xs:element name="datetime" type="xs:string" minOccurs="0"/>
+                <xs:element name="bin">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="binId" type="xs:int"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

@@ -1,0 +1,10 @@
+edu/mondragon/os/pbl/recyclai/BackendService.class
+edu/mondragon/os/pbl/recyclai/TrashBinSystem.class
+edu/mondragon/os/pbl/recyclai/Bin.class
+edu/mondragon/os/pbl/recyclai/TrashGenerator.class
+edu/mondragon/os/pbl/recyclai/Person.class
+edu/mondragon/os/pbl/recyclai/GarbageCollector.class
+edu/mondragon/os/pbl/recyclai/Compartment.class
+edu/mondragon/os/pbl/recyclai/App.class
+edu/mondragon/os/pbl/recyclai/TrashType.class
+edu/mondragon/os/pbl/recyclai/Technician.class

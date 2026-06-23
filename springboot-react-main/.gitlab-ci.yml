@@ -1,0 +1,77 @@
+image: markhobson/maven-chrome:jdk-21
+
+stages:
+  - test
+  - sonar
+
+# --- BACKEND (SPRING BOOT) ---
+backend_test_job:
+  stage: test
+  script:
+    - cd recycleai-server
+    - echo "Executing tests..."
+    - mvn clean verify
+  artifacts:
+    paths:
+      - recycleai-server/target/site/jacoco/jacoco.xml
+      - recycleai-server/target/classes/
+  only:
+    - merge_requests
+    - main
+    - branches
+
+# --- FRONTEND (REACT Playwright) ---
+frontend_test_job:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.57.0-jammy
+  script:
+    - cd recycleai-frontend
+    - npm ci
+    
+    # 1. Ejecutar Tests Unitarios (Jest) + Generar Cobertura
+    - echo "Ejecutando Unit Tests..."
+    - npm test -- --coverage --watchAll=false --ci
+    
+    # 2. Construir Frontend para E2E
+    - echo "Building frontend..."
+    - npm run build
+    
+    # 3. Instalar Browsers de Playwright
+    - echo "Installing Playwright Browsers..."
+    - npx playwright install --with-deps chromium
+
+    # 4. Ejecutar Playwright
+    - echo "Ejecutando E2E Tests..."
+    - npx playwright test
+    
+  artifacts:
+    when: always
+    paths:
+      - recycleai-frontend/coverage/
+      - recycleai-frontend/playwright-report/
+    reports:
+      junit: recycleai-frontend/playwright-report/results.xml
+  only:
+    - merge_requests
+    - main
+    - branches
+
+# --- QUALITY ANALYSIS ---
+sonar_job:
+  stage: sonar
+  image: 
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  needs: ["backend_test_job", "frontend_test_job"]
+  variables:
+    GIT_DEPTH: "0"
+    
+  script:
+    - echo "Initializing Backend & Frontend analysis..."
+    - sonar-scanner -Dsonar.projectKey=pbl52_springboot-react  -Dsonar.qualitygate.wait=true -Dsonar.organization=pbl52 -Dsonar.host.url=https://sonarcloud.io -Dsonar.sources=recycleai-server/src/main/java,recycleai-frontend/src -Dsonar.tests=recycleai-server/src/test/java,recycleai-frontend/tests,recycleai-frontend/src/tests -Dsonar.java.binaries=recycleai-server/target/classes -Dsonar.coverage.jacoco.xmlReportPaths=recycleai-server/target/site/jacoco/jacoco.xml -Dsonar.javascript.lcov.reportPaths=recycleai-frontend/coverage/lcov.info -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/build/**,**/*.spec.js,**/*.test.js,**/coverage/**"
+    
+  allow_failure: false
+  only:
+    - merge_requests
+    - main
+    - branches

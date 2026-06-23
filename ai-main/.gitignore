@@ -1,0 +1,11 @@
+/dataset
+/dataset_balanced
+/images
+/samples
+
+# Python
+__pycache__/
+coverage.xml
+.pytest_cache/
+htmlcov/
+venv/

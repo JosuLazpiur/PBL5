@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Person.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">pbl_recyclai</a> &gt; <a href="index.source.html" class="el_package">edu.mondragon.os.pbl.recyclai</a> &gt; <span class="el_source">Person.java</span></div><h1>Person.java</h1><pre class="source lang-java linenums">package edu.mondragon.os.pbl.recyclai;
+
+import java.util.List;
+import java.util.Random;
+
+/**
+ * PERSON: CLIENT THREAD
+ * * Represents a user interacting with the system.
+ * Multiple Person threads run concurrently, creating contention for the shared Bins.
+ * They attempt to enter the Monitor (Bin) to deposit trash.
+ */
+
+public class Person extends Thread {
+    private String name;
+    private List&lt;TrashType&gt; itemsToDispose;
+    private TrashBinSystem system;
+<span class="fc" id="L17">    private Random rand = new Random();</span>
+    private Bin assignedBin;
+
+<span class="fc" id="L20">    public Person(String name, List&lt;TrashType&gt; items, TrashBinSystem system) {</span>
+<span class="fc" id="L21">        this.name = name;</span>
+<span class="fc" id="L22">        this.itemsToDispose = items;</span>
+<span class="fc" id="L23">        this.system = system;</span>
+<span class="fc" id="L24">        this.assignedBin = system.getRandomBin();</span>
+<span class="fc" id="L25">    }</span>
+
+     @Override
+    public void run() {
+        try {
+<span class="fc" id="L30">            System.out.printf(&quot;[%s] %s assigned to %s. Starting disposal route.%n&quot;, </span>
+<span class="fc" id="L31">                    system.time(), name, assignedBin.getId());</span>
+            
+<span class="fc bfc" id="L33" title="All 2 branches covered.">            for (TrashType trash : itemsToDispose) {</span>
+                // Try to deposit.
+                // This call might block the thread if the Bin monitor is locked or conditions are not met.
+<span class="fc" id="L36">                assignedBin.deposit(trash, this.name);</span>
+                
+                // Simulate travel time or delay between items SONAR fix casting to L
+<span class="fc" id="L39">                Thread.sleep(50L + rand.nextInt(100));</span>
+<span class="fc" id="L40">            }</span>
+<span class="fc" id="L41">            System.out.printf(&quot;[%s] %s has finished disposing all trash in %s.%n&quot;, system.time(), name, assignedBin.getId());</span>
+<span class="fc" id="L42">        } catch (InterruptedException e) {</span>
+<span class="fc" id="L43">            System.out.println(name + &quot; interrupted.&quot;);</span>
+<span class="fc" id="L44">            Thread.currentThread().interrupt();</span>
+<span class="fc" id="L45">        }</span>
+<span class="fc" id="L46">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

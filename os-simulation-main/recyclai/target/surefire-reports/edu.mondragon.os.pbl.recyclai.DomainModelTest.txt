@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: edu.mondragon.os.pbl.recyclai.DomainModelTest
+-------------------------------------------------------------------------------
+Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.612 s - in edu.mondragon.os.pbl.recyclai.DomainModelTest

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Bin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">pbl_recyclai</a> &gt; <a href="index.source.html" class="el_package">edu.mondragon.os.pbl.recyclai</a> &gt; <span class="el_source">Bin.java</span></div><h1>Bin.java</h1><pre class="source lang-java linenums">package edu.mondragon.os.pbl.recyclai;
+
+import java.util.EnumMap;
+import java.util.concurrent.locks.*;
+
+/**
+ * BIN: MONITOR PATTERN IMPLEMENTATION
+ * * This class acts as a Monitor (Shared Resource). It encapsulates:
+ * 1. Shared Data (Compartments state).
+ * 2. Mutual Exclusion (ReentrantLock).
+ * 3. Conditional Synchronization (Condition variables).
+ * * It ensures that multiple threads (Persons, Technician, Collector) can
+ * access
+ * the bin safely without Race Conditions.
+ */
+
+public class Bin {
+    private String id;
+<span class="fc" id="L19">    private EnumMap&lt;TrashType, Compartment&gt; compartments = new EnumMap&lt;&gt;(TrashType.class);</span>
+    private TrashBinSystem system;
+
+    // --- SHARED STATE VARIABLES ---
+    private int fullCompartmentCount;
+    private boolean isUnderMaintenance;
+    private boolean isBroken;
+    private boolean isQueuedForCollection;
+    private boolean serviceRequested;
+
+<span class="fc" id="L29">    private Lock mutex = new ReentrantLock(true);</span>
+<span class="fc" id="L30">    private Condition binOperational = mutex.newCondition();</span>
+
+    // Condition Variable 2: Specific Wait Queues per Trash Type.
+    // Granular locking optimization: A user waiting for PLASTIC does not block a
+    // user waiting for GLASS.
+<span class="fc" id="L35">    private EnumMap&lt;TrashType, Condition&gt; spaceAvailable = new EnumMap&lt;&gt;(TrashType.class);</span>
+
+<span class="fc" id="L37">    public Bin(String id, int capacityPerType, TrashBinSystem system) {</span>
+<span class="fc" id="L38">        this.id = id;</span>
+<span class="fc" id="L39">        this.system = system;</span>
+<span class="fc" id="L40">        this.fullCompartmentCount = 0;</span>
+
+<span class="fc bfc" id="L42" title="All 2 branches covered.">        for (TrashType t : TrashType.values()) {</span>
+<span class="fc" id="L43">            compartments.put(t, new Compartment(t, capacityPerType));</span>
+<span class="fc" id="L44">            spaceAvailable.put(t, mutex.newCondition());</span>
+        }
+<span class="fc" id="L46">    }</span>
+
+    public String getId() {
+<span class="fc" id="L49">        return id;</span>
+    }
+
+    /**
+     * CRITICAL SECTION: Deposit Trash
+     * This method implements the logic for a thread to enter the monitor and modify
+     * state.
+     * It handles blocking logic if conditions are not met.
+     */
+    public void deposit(TrashType type, String personName) throws InterruptedException {
+<span class="fc" id="L59">        mutex.lock();</span>
+        try {
+<span class="fc" id="L61">            waitForAvailability(type, personName);</span>
+
+            // Action: Deposit garbage
+<span class="fc" id="L64">            Compartment c = compartments.get(type);</span>
+<span class="fc" id="L65">            c.add();</span>
+<span class="fc" id="L66">            System.out.printf(&quot;[%s] %s has thrown %s in %s (id=%s). Level=%d/%d%n&quot;,</span>
+<span class="fc" id="L67">                    system.time(), personName, type, id, type, c.getLevel(), c.getCapacity());</span>
+
+            // If full, notify the system (Message Passing) and update Backend (Integration)
+<span class="fc bfc" id="L70" title="All 2 branches covered.">            if (c.isFull()) {</span>
+<span class="fc" id="L71">                System.out.printf(&quot;[%s] ALERT: %s in %s is now FULL.%n&quot;, system.time(), type, id);</span>
+<span class="fc" id="L72">                BackendService.sendAlert(this.id, &quot;Compartment Full&quot;, type + &quot; compartment is full.&quot;);</span>
+<span class="fc" id="L73">                reportFullCompartment();</span>
+            }
+        } finally {
+<span class="fc" id="L76">            mutex.unlock();</span>
+        }
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Helper method to handle conditional waiting logic (The &quot;Wait Loop&quot;).
+     */
+    private void waitForAvailability(TrashType type, String personName) throws InterruptedException {
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        while (shouldWait(type)) {</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">            if (isGlobalBlock()) {</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">                String status = isBroken ? &quot;BROKEN&quot; : &quot;COLLECTOR is working&quot;;</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">                String reason = serviceRequested ? &quot;Service Vehicle Priority&quot; : status;</span>
+
+<span class="fc" id="L89">                System.out.printf(&quot;[%s] %s waits for %s in %s (%s).%n&quot;,</span>
+<span class="fc" id="L90">                        system.time(), personName, type, id, reason);</span>
+
+<span class="fc" id="L92">                binOperational.await();</span>
+<span class="fc" id="L93">            } else {</span>
+<span class="fc" id="L94">                Compartment c = compartments.get(type);</span>
+<span class="fc" id="L95">                System.out.printf(&quot;[%s] %s wants to throw %s in %s but it is FULL (%d/%d).%n&quot;,</span>
+<span class="fc" id="L96">                        system.time(), personName, type, id, c.getLevel(), c.getCapacity());</span>
+
+<span class="fc" id="L98">                spaceAvailable.get(type).await();</span>
+<span class="fc" id="L99">            }</span>
+        }
+<span class="fc" id="L101">    }</span>
+
+    private boolean shouldWait(TrashType type) {
+<span class="fc bfc" id="L104" title="All 4 branches covered.">        return isGlobalBlock() || compartments.get(type).isFull();</span>
+    }
+
+    private boolean isGlobalBlock() {
+        // Priority logic: Broken or Maintenance stops everyone.
+<span class="pc bpc" id="L109" title="1 of 6 branches missed.">        return isBroken || isUnderMaintenance || serviceRequested;</span>
+    }
+
+    private void reportFullCompartment() {
+<span class="fc" id="L113">        fullCompartmentCount++;</span>
+<span class="pc bpc" id="L114" title="1 of 4 branches missed.">        if (fullCompartmentCount &gt;= 1 &amp;&amp; !isQueuedForCollection) {</span>
+<span class="fc" id="L115">            isQueuedForCollection = true;</span>
+<span class="fc" id="L116">            System.out.printf(&quot;[%s] SYSTEM: Single compartment full in %s. Requesting collection.%n&quot;,</span>
+<span class="fc" id="L117">                    system.time(), this.getId());</span>
+            // Delegate to System (Message Passing)
+<span class="fc" id="L119">            system.requestCollection(this);</span>
+        }
+<span class="fc" id="L121">    }</span>
+
+    public void emptyAllCompartments() {
+<span class="fc" id="L124">        mutex.lock();</span>
+        try {
+<span class="fc bfc" id="L126" title="All 2 branches covered.">            for (Compartment c : compartments.values()) {</span>
+<span class="fc" id="L127">                c.empty();</span>
+                // Signal: Wake up all threads waiting on this specific trash type condition.
+<span class="fc" id="L129">                spaceAvailable.get(c.getType()).signalAll();</span>
+<span class="fc" id="L130">            }</span>
+        } finally {
+<span class="fc" id="L132">            mutex.unlock();</span>
+        }
+<span class="fc" id="L134">    }</span>
+
+    public void setBroken(boolean broken) throws InterruptedException {
+<span class="fc" id="L137">        mutex.lock();</span>
+        try {
+<span class="fc bfc" id="L139" title="All 2 branches covered.">            if (broken) {</span>
+<span class="fc" id="L140">                this.serviceRequested = true;</span>
+<span class="fc bfc" id="L141" title="All 2 branches covered.">                while (isUnderMaintenance) {</span>
+<span class="fc" id="L142">                    binOperational.await();</span>
+                }
+<span class="fc" id="L144">                this.isBroken = true;</span>
+<span class="fc" id="L145">                this.serviceRequested = false;</span>
+            } else {
+<span class="fc" id="L147">                this.isBroken = false;</span>
+                // Wake up ALL threads (Users and Collector) waiting on the global condition
+<span class="fc" id="L149">                binOperational.signalAll();</span>
+            }
+        } finally {
+<span class="fc" id="L152">            mutex.unlock();</span>
+        }
+<span class="fc" id="L154">    }</span>
+
+    public void setUnderMaintenance(boolean active) throws InterruptedException {
+<span class="fc" id="L157">        mutex.lock();</span>
+        try {
+<span class="fc bfc" id="L159" title="All 2 branches covered.">            if (active) {</span>
+<span class="fc" id="L160">                this.serviceRequested = true;</span>
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">                while (isBroken) {</span>
+<span class="nc" id="L162">                    binOperational.await();</span>
+                }
+<span class="fc" id="L164">                this.isUnderMaintenance = true;</span>
+<span class="fc" id="L165">                this.serviceRequested = false;</span>
+            } else {
+<span class="fc" id="L167">                this.isUnderMaintenance = false;</span>
+<span class="fc" id="L168">                this.isQueuedForCollection = false;</span>
+<span class="fc" id="L169">                this.fullCompartmentCount = 0;</span>
+                // Signal that Bin is operative again
+<span class="fc" id="L171">                binOperational.signalAll();</span>
+            }
+        } finally {
+<span class="fc" id="L174">            mutex.unlock();</span>
+        }
+<span class="fc" id="L176">    }</span>
+
+    public boolean isBroken() {
+<span class="fc" id="L179">        mutex.lock();</span>
+        try {
+<span class="fc" id="L181">            return isBroken;</span>
+        } finally {
+<span class="fc" id="L183">            mutex.unlock();</span>
+        }
+    }
+
+    public boolean isUnderMaintenance() {
+<span class="fc" id="L188">        mutex.lock();</span>
+        try {
+<span class="fc" id="L190">            return isUnderMaintenance;</span>
+        } finally {
+<span class="fc" id="L192">            mutex.unlock();</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

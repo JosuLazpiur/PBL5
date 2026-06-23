@@ -1,0 +1,9 @@
+============================================================
+FINAL PERFORMANCE REPORT
+============================================================
+
+Final Accuracy: 92.73%
+F1-Score: 92.75%
+AUC: 0.9923
+Train-Val Difference: 11.32%
+Overfitting Status: RISK

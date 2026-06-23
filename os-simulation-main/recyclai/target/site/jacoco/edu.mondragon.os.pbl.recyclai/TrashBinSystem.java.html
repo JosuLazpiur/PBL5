@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="es"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TrashBinSystem.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">pbl_recyclai</a> &gt; <a href="index.source.html" class="el_package">edu.mondragon.os.pbl.recyclai</a> &gt; <span class="el_source">TrashBinSystem.java</span></div><h1>TrashBinSystem.java</h1><pre class="source lang-java linenums">package edu.mondragon.os.pbl.recyclai;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+/**
+ * CORE SYSTEM: SYNCHRONIZATION VIA MESSAGE PASSING (Rubric Level 3)
+ * * This class implements the Producer-Consumer pattern using Message Passing.
+ * Instead of using shared memory protected by manual Monitors
+ * (Locks/Condition),
+ * it uses a thread-safe BlockingQueue to coordinate Bins and the Collector.
+ * 
+ *  * * Roles:
+ * - Producers: The Bins (when they become full).
+ * - Consumer: The GarbageCollector thread.
+ * - Message: The 'Bin' object reference passed through the queue.
+ */
+ 
+public class TrashBinSystem {
+<span class="fc" id="L25">    private List&lt;Bin&gt; binList = new ArrayList&lt;&gt;();</span>
+
+    // [MESSAGE PASSING CHANNEL]
+    // BlockingQueue is a thread-safe structure that handles concurrency internally.
+    // It handles concurrency internally using Locks and Condition Variables,
+    // abstracting the synchronization complexity from the user.
+<span class="fc" id="L31">    private BlockingQueue&lt;Bin&gt; collectionQueue = new LinkedBlockingQueue&lt;&gt;();</span>
+
+    // [POISON PILL PATTERN]
+    // A special object used to signal the Consumer thread to terminate gracefully.
+    // Since take() blocks indefinitely, we need a message to &quot;unblock&quot; and stop it.
+    private final Bin poisonPill;
+
+<span class="fc" id="L38">    private boolean shutdown = false;</span>
+
+<span class="fc" id="L40">    private final Random rand = new Random();</span>
+<span class="fc" id="L41">    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(&quot;dd/MM/yyyy HH:mm:ss&quot;);</span>
+
+<span class="fc" id="L43">    public TrashBinSystem(int numBins, int capacityPerType) {</span>
+        // Initialize the termination signal (dummy bin with ID &quot;SHUTDOWN_SIGNAL&quot;)
+<span class="fc" id="L45">        this.poisonPill = new Bin(&quot;SHUTDOWN_SIGNAL&quot;, 0, this);</span>
+
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        for (int i = 1; i &lt;= numBins; i++) {</span>
+<span class="fc" id="L48">            String binId = &quot;BIN_&quot; + i;</span>
+<span class="fc" id="L49">            binList.add(new Bin(binId, capacityPerType, this));</span>
+        }
+<span class="fc" id="L51">    }</span>
+
+    public Bin getRandomBin() {
+<span class="fc" id="L54">        return binList.get(rand.nextInt(binList.size()));</span>
+    }
+
+    public int getNumBins() {
+<span class="fc" id="L58">        return binList.size();</span>
+    }
+
+    public Bin getBin(int idx) {
+<span class="fc" id="L62">        return binList.get(idx % binList.size());</span>
+    }
+
+    /**
+     * [PRODUCER]
+     * Called by Bins when a compartment is full.
+     * It sends a message (the Bin object) to the shared queue.
+     * * Concurrency: Thread-safe. 'put' handles internal locking.
+     * * If the queue were bounded (limited size) and full, this thread would block.
+     */
+    public void requestCollection(Bin bin) {
+        try {
+<span class="fc" id="L74">            System.out.printf(&quot;[%s] SYSTEM: Request received from %s. Sending message to queue.%n&quot;, time(),</span>
+<span class="fc" id="L75">                    bin.getId());</span>
+<span class="fc" id="L76">            collectionQueue.put(bin);</span>
+<span class="fc" id="L77">        } catch (InterruptedException e) {</span>
+<span class="fc" id="L78">            Thread.currentThread().interrupt();</span>
+<span class="fc" id="L79">        }</span>
+<span class="fc" id="L80">    }</span>
+
+    /**
+     * [CONSUMER]
+     * Called by GarbageCollector to retrieve the next task.
+     * * Concurrency: Uses 'take()' which BLOCKS the thread if the queue is empty.
+     * This eliminates &quot;Busy Waiting&quot; (Level 2 requirement) and simplifies
+     * synchronization.
+     */
+    public Bin waitForNextJob() throws InterruptedException {
+        // BLOCKS here until a message is available.
+<span class="fc" id="L91">        Bin task = collectionQueue.take();</span>
+
+        // Check if the message is the Poison Pill (Shutdown signal)
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (task == poisonPill) {</span>
+<span class="fc" id="L95">            return null; // Return null to break the Collector's loop</span>
+        }
+
+<span class="fc" id="L98">        return task;</span>
+    }
+
+    public void stopSystem() {
+<span class="fc" id="L102">        shutdown = true;</span>
+        try {
+<span class="fc" id="L104">            System.out.printf(&quot;[%s] SYSTEM: Sending shutdown signal (Poison Pill) to Collector.%n&quot;, time());</span>
+            // We send the Poison Pill to unblock the consumer if it's waiting, ensuring a clean exit.
+<span class="fc" id="L106">            collectionQueue.put(poisonPill);</span>
+<span class="fc" id="L107">        } catch (InterruptedException e) {</span>
+<span class="fc" id="L108">            Thread.currentThread().interrupt();</span>
+<span class="fc" id="L109">        }</span>
+<span class="fc" id="L110">    }</span>
+
+    public boolean isShutdown() {
+<span class="fc" id="L113">        return shutdown;</span>
+    }
+
+    public String time() {
+<span class="fc" id="L117">        return LocalDateTime.now().format(FORMATTER);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
